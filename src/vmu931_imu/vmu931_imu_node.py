@@ -128,6 +128,11 @@ class Vmu931Node:
 		self._imu_msg.orientation_covariance = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 		self._imu_msg.angular_velocity_covariance = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 		self._imu_msg.linear_acceleration_covariance = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+
+		self.offset_iterations = 10
+		self._imu_acc_offset = [0, 0, 0]
+		self._imu_gyro_offset = [0, 0, 0]
 		
 		self._gyro_msg = Vector3Stamped()
 		self._gyro_msg.header.frame_id = self._frame_id
@@ -194,9 +199,28 @@ class Vmu931Node:
 			trials+=1
 		
 		#self._imu_dev.printStatus()
-		
+
+		for i in xrange(self.offset_iterations):
+			ret, msg = self._imu_dev.readOneTime()
+			
+			if ret == 0:
+				gy = self._imu_dev.value["Gyroscopes"]
+				acc = self._imu_dev.value["Accelerometers"]
+				self._imu_acc_offset[0] += acc.x
+				self._imu_acc_offset[1] += acc.y
+				self._imu_acc_offset[2] += acc.z
+
+				self._imu_gyro_offset[0] += math.radians(gy.x)
+				self._imu_gyro_offset[1] += math.radians(gy.y)
+				self._imu_gyro_offset[2] += math.radians(gy.z)
+
+		self._imu_acc_offset = [x/self.offset_iterations for x in self._imu_acc_offset]
+		self._imu_gyro_offset = [x/self.offset_iterations for x in self._imu_gyro_offset]
+
 		self.desired_freq = self._imu_dev.status.ouptputRate
 		self.time_sleep = 1.0 / self.desired_freq
+
+
 			
 		self.initialized = True
 		
@@ -454,9 +478,9 @@ class Vmu931Node:
 			
 			if msg == vmu.GYROSCOPES:
 				self._gyro_msg.header.stamp = current_time
-				self._gyro_msg.vector.x = math.radians(gy.x)
-				self._gyro_msg.vector.y = math.radians(gy.y)
-				self._gyro_msg.vector.z = math.radians(gy.z)
+				self._gyro_msg.vector.x = math.radians(gy.x) - self._imu_gyro_offset[0]
+				self._gyro_msg.vector.y = math.radians(gy.y) - self._imu_gyro_offset[1]
+				self._gyro_msg.vector.z = math.radians(gy.z) - self._imu_gyro_offset[2]
 				self._gyro_publisher.publish(self._gyro_msg)
 			
 			if msg == vmu.EULER_ANGLES:
@@ -468,9 +492,9 @@ class Vmu931Node:
 					
 			if msg == vmu.ACCELEROMETERS:
 				self._accel_msg.header.stamp = current_time
-				self._accel_msg.vector.x = acc.x*9.81
-				self._accel_msg.vector.y = acc.y*9.81
-				self._accel_msg.vector.z = acc.z*9.81
+				self._accel_msg.vector.x = acc.x*9.81 - self._imu_acc_offset[0]
+				self._accel_msg.vector.y = acc.y*9.81 - self._imu_acc_offset[1]
+				self._accel_msg.vector.z = acc.z*9.81 - self._imu_acc_offset[2]
 				self._accel_publisher.publish(self._accel_msg)
 					
 			if msg == vmu.MAGNETOMETERS:
