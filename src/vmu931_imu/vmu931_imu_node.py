@@ -130,7 +130,7 @@ class Vmu931Node:
 		self._imu_msg.linear_acceleration_covariance = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 
-		self.offset_iterations = 10
+		self._offset_iterations = 10
 		self._imu_acc_offset = [0, 0, 0]
 		self._imu_gyro_offset = [0, 0, 0]
 		
@@ -200,7 +200,17 @@ class Vmu931Node:
 		
 		#self._imu_dev.printStatus()
 
-		for i in xrange(self.offset_iterations):
+		self.desired_freq = self._imu_dev.status.ouptputRate
+		self.time_sleep = 1.0 / self.desired_freq
+
+
+			
+		self.initialized = True
+		
+		return 0
+		
+        def offset_calibration(self):
+		for i in xrange(self._offset_iterations):
 			ret, msg = self._imu_dev.readOneTime()
 			
 			if ret == 0:
@@ -214,18 +224,9 @@ class Vmu931Node:
 				self._imu_gyro_offset[1] += math.radians(gy.y)
 				self._imu_gyro_offset[2] += math.radians(gy.z)
 
-		self._imu_acc_offset = [x/self.offset_iterations for x in self._imu_acc_offset]
-		self._imu_gyro_offset = [x/self.offset_iterations for x in self._imu_gyro_offset]
-
-		self.desired_freq = self._imu_dev.status.ouptputRate
-		self.time_sleep = 1.0 / self.desired_freq
-
-
-			
-		self.initialized = True
-		
-		return 0
-		
+		self._imu_acc_offset = [x/float(self._offset_iterations) for x in self._imu_acc_offset]
+		self._imu_gyro_offset = [x/float(self._offset_iterations) for x in self._imu_gyro_offset]
+                rospy.logwarn(self._imu_acc_offset)
 		
 	def rosSetup(self):
 		'''
